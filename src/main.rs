@@ -1,27 +1,30 @@
+mod day8;
+
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Index;
+use num::Integer;
 
-#[derive(Eq, PartialEq, Debug)]
-struct Node {
-    name: String,
-    left: String,
-    right: String,
-}
-
-impl Node {
-    fn new(name: &String, left: &String, right: &String) -> Self {
-        Node {
-            name: name.to_owned(),
-            left: left.to_owned(),
-            right: right.to_owned(),
+fn find_next(line: &String) -> i32 {
+    let nums: Vec<i32> = line.split_whitespace()
+        .filter_map(|word| word.parse().ok())
+        .collect();
+    let mut diffs: Vec<Vec<i32>> = Vec::new();
+    let mut cur_diff = nums.clone();
+    while !cur_diff.iter().all(|x| *x == 0) {
+        let mut new_diffs: Vec<i32> = Vec::new();
+        for i in 0..(cur_diff.len() - 1) {
+            new_diffs.push(cur_diff[i + 1] - cur_diff[i])
         }
+        cur_diff = new_diffs.clone();
+        diffs.push(cur_diff.clone());
     }
+    return 0
 }
 
 fn main() {
     // Part 1.
-    let file_path = "/Users/viktor/sources/adventofcode2023/src/input8.txt";
+    let file_path = "/Users/viktor/sources/adventofcode2023/src/input9.txt";
 
     let lines: Vec<String> = fs::read_to_string(file_path)
         .unwrap()
@@ -29,42 +32,10 @@ fn main() {
         .map(String::from)
         .collect();
 
-    let mut node_map: HashMap<String, Node> = HashMap::new();
-
-    for line in lines.iter().skip(2) {
-        let parts: Vec<&str> = line.split("=").collect();
-        let node_name = parts[0].trim();
-        let lr: Vec<&str> = parts[1].split(", ").collect();
-        let left = lr[0].index(2..);
-        let right = lr[1].index(..lr[1].len() - 1);
-
-        let node = Node::new(&node_name.to_string(), &left.to_string(), &right.to_string());
-        node_map.insert(node_name.to_string(), node);
+    let mut sum = 0;
+    for line in lines {
+        let next = find_next(&line);
+        sum += next;
     }
-
-    // let left = &a.borrow().left.clone().unwrap();
-    // let right = &a.borrow().right.clone().unwrap();
-    // println!("Left: {}", left.borrow().name);
-    // println!("Right: {}", right.borrow().name);
-
-    let mut idx = 0;
-    let mut a = node_map.get("AAA").unwrap();
-    let dirs: Vec<char> = lines[0].chars().collect();
-    let mut count = 0;
-    while a.name != "ZZZ" {
-        let dir = dirs.get(idx);
-        if dir.unwrap() == &'L' {
-            a = node_map.get(&a.left).unwrap();
-        } else {
-            a = node_map.get(&a.right).unwrap();
-        }
-        idx += 1;
-        count += 1;
-        if idx >= dirs.len() {
-            idx = 0;
-        }
-    }
-
-    println!("Part 1: {}", count);
-
+    println!("Part 1: {}", sum);
 }
