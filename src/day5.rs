@@ -1,9 +1,6 @@
 use std::cmp::min;
 use std::fs;
 
-mod day5;
-mod day6;
-
 #[derive(Eq, Hash, PartialEq)]
 struct SeedRange {
     dest: i64,

@@ -12,3 +12,4 @@ ascii = "1.1.0"
 regex = "1.10.2"
 once_cell = { version = "1.19.0", features = [] }
 h2 = { version = "0.4.0", features = [] }
+queues = "1.0.2"
