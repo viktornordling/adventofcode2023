@@ -49,7 +49,7 @@ fn main() {
         .map(String::from)
         .collect();
 
-    let mut grid: Vec<Vec<char>> = lines.iter()
+    let grid: Vec<Vec<char>> = lines.iter()
         .map(|line| line.chars().collect())
         .collect();
 
@@ -60,7 +60,7 @@ fn main() {
         println!();
     }
 
-    let mut points: HashMap<i32, &Point> = HashMap::new();
+    let mut points: HashMap<i32, Point> = HashMap::new();
     let mut count: i32 = 0;
     for y in 0..grid.len() {
         let line = grid.get(y).unwrap();
@@ -83,7 +83,7 @@ fn main() {
             }
             let has_star = grid[y][x] != '.';
             let point = Point { id: count, has_star, initial_x: x as i32, initial_y: y as i32, left, right, up, down, final_x: -1, final_y: -1 };
-            points.insert(count, &point);
+            points.insert(count, point);
             count += 1;
         }
     }
@@ -127,13 +127,15 @@ fn main() {
         for star2 in stars {
             if star1.id != star2.id && !checked.contains(&(star1.id, star2.id)) {
                 tot_dist += abs(star1.final_x - star2.final_x) + abs(star1.final_x - star2.final_x);
+                checked.insert((star1.id, star2.id));
+                checked.insert((star2.id, star1.id));
             }
         }
     }
     println!("Part 1: {}", tot_dist);
 }
 
-fn duplicate_line_above(start_point: &Point, points: &mut HashMap<i32, &Point>, cur_count: i32) -> i32 {
+fn duplicate_line_above(start_point: &Point, points: &mut HashMap<i32, Point>, cur_count: i32) -> i32 {
     let mut cur = start_point;
     let mut count = cur_count;
     while cur.right != -1 {
@@ -187,7 +189,7 @@ fn duplicate_col_to_the_left(start_point: &Point, points: &mut HashMap<i32, Poin
     return count;
 }
 
-fn line_has_star(start_point: &Point, points: &HashMap<i32, &Point>) -> bool {
+fn line_has_star(start_point: &Point, points: &mut HashMap<i32, Point>) -> bool {
     let mut cur = start_point;
     while cur.right != -1 {
         if cur.has_star {
@@ -198,7 +200,7 @@ fn line_has_star(start_point: &Point, points: &HashMap<i32, &Point>) -> bool {
     return false;
 }
 
-fn col_has_star(start_point: &Point, points: &HashMap<i32, &Point>) -> bool {
+fn col_has_star(start_point: &Point, points: &mut HashMap<i32, Point>) -> bool {
     let mut cur = start_point;
     while cur.down != -1 {
         if cur.has_star {
