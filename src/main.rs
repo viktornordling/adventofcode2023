@@ -221,7 +221,7 @@ fn duplicate_line_above(start_point: i32, points: &mut HashMap<i32, Point>, cur_
 fn duplicate_col_to_the_left(start_point: i32, points: &mut HashMap<i32, Point>, cur_count: i32) -> i32 {
     let mut cur_id = start_point;
     let mut new_id = cur_count;
-    while points[&cur_id].down != -1 {
+    while cur_id != -1 {
         let cur = points[&cur_id];
         new_id += 1;
         let mut new_point =  Point { id: new_id, has_star: false, initial_x: cur.initial_x, initial_y: cur.initial_y - 1, left: -1, right: -1, up: -1, down: -1, final_x: -1, final_y: -1 };
