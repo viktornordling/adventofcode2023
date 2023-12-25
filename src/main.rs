@@ -1,10 +1,9 @@
 extern crate queues;
 
+use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
-
-use num::abs;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Pos {
@@ -36,35 +35,6 @@ struct Point {
 impl Hash for Point {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
-    }
-}
-
-fn print_map(start_point: i32, points: &HashMap<i32, Point>) {
-    let mut cur = start_point;
-    while cur != -1 {
-        print_row(cur, points);
-        print!("\n");
-        cur = points[&cur].down;
-    }
-}
-
-fn print_row(start: i32, points: &HashMap<i32, Point>) {
-    let mut cur = start;
-    while cur != -1 {
-        let mp = points.get(&cur);
-        match mp {
-            None => {
-                println!("No point found for id {}!", cur);
-            }
-            Some(p) => {
-                if p.has_star {
-                    print!("#");
-                } else {
-                    print!(".");
-                }
-            }
-        }
-        cur = points[&cur].right;
     }
 }
 
@@ -120,51 +90,63 @@ fn main() {
 
     // println!();
     // print_map(0, &points);
+    let mut rows_without_stars: HashSet<i32> = HashSet::new();
+    let mut cols_without_stars: HashSet<i32> = HashSet::new();
 
-    // Grow rows.
+    // Find rows without stars.
     let mut cur_id = 0;
+    let mut line_nr = 0;
     while points.get(&cur_id).unwrap().down != -1 {
-        if !line_has_star(cur_id, &mut points) {
-            println!("Duplicating line above");
-            for i in 0..10 {
-                if i % 100000 == 0 {
-                    println!("100000 lines")
-                }
-                count = duplicate_line_above(cur_id, &mut points, count);
-            }
-            print_map(0, &points);
-            println!();
+        if !row_has_star(cur_id, &mut points) {
+            rows_without_stars.insert(line_nr);
         }
         cur_id = points.get(&cur_id).unwrap().down;
+        line_nr += 1;
     }
     // print_map(0, &points);
 
     // Grow columns
     cur_id = 0;
+    let mut col_nr = 0;
     while cur_id != -1 {
         if !col_has_star(cur_id, &mut points) {
-            for i in 0..10 {
-                if i % 10000 == 0 {
-                    println!("10000 cols")
-                }
-                count = duplicate_col_to_the_left(cur_id, &mut points, count);
-            }
+            cols_without_stars.insert(col_nr);
         }
         cur_id = points.get(&cur_id).unwrap().right;
+        col_nr += 1;
     }
-    // Update the x / y of each point.
-    set_final_x_y(& mut points);
 
     let stars: HashSet<i32> = points.values().filter(|p| p.has_star).map(|p| p.id).collect();
 
     let mut checked: HashSet<(i32, i32)> = HashSet::new();
-    let mut tot_dist = 0;
+    let mut tot_dist: i64 = 0;
+    let dupes = 1000000;
     for star1 in stars.clone() {
         for star2 in stars.clone() {
             if star1!= star2 && !checked.contains(&(star1, star2)) {
                 let s1 = points.get(&star1).unwrap();
                 let s2 = points.get(&star2).unwrap();
-                let dist = abs(s1.final_x - s2.final_x) + abs(s1.final_y - s2.final_y);
+                let mut y_dist = 0;
+                let mut x_dist = 0;
+                let y_start = min(s1.initial_y, s2.initial_y);
+                let y_end = max(s1.initial_y, s2.initial_y);
+                for y in y_start..y_end {
+                    if rows_without_stars.contains(&y) {
+                        y_dist += dupes;
+                    } else {
+                        y_dist += 1;
+                    }
+                }
+                let x_start = min(s1.initial_x, s2.initial_x);
+                let x_end = max(s1.initial_x, s2.initial_x);
+                for x in x_start..x_end {
+                    if cols_without_stars.contains(&x) {
+                        x_dist += dupes;
+                    } else {
+                        x_dist += 1;
+                    }
+                }
+                let dist = x_dist + y_dist;
                 // println!("Dist between star in pos {},{} and {},{} is {}", s1.final_x, s1.final_y, s2.final_x, s2.final_y, dist);
                 tot_dist += dist;
                 checked.insert((s1.id, s2.id));
@@ -175,93 +157,7 @@ fn main() {
     println!("Part 1: {}", tot_dist);
 }
 
-fn set_final_x_y(points: &mut HashMap<i32, Point>) {
-    let mut y = 0;
-    let mut cur_id = 0;
-    while cur_id != -1 {
-        update_row(cur_id, y, points);
-        cur_id = points[&cur_id].down;
-        y += 1;
-    }
-}
-
-fn update_row(start_id: i32, y: i32, points: &mut HashMap<i32, Point>) {
-    let mut cur_id = start_id;
-    let mut x = 0;
-    while cur_id != -1 {
-        let mut point = points.get_mut(&cur_id).unwrap();
-        point.final_y = y;
-        point.final_x = x;
-        x += 1;
-        cur_id = points[&cur_id].right;
-    }
-}
-
-fn duplicate_line_above(start_point: i32, points: &mut HashMap<i32, Point>, cur_count: i32) -> i32 {
-    let mut cur_id = start_point;
-    let mut new_id = cur_count;
-    while cur_id != -1 {
-        let cur = points[&cur_id];
-        new_id += 1;
-        let mut new_point =  Point { id: new_id, has_star: false, initial_x: cur.initial_x, initial_y: cur.initial_y - 1, left: -1, right: -1, up: -1, down: -1, final_x: -1, final_y: -1 };
-        if cur.up != -1 {
-            let above = points.get_mut(&cur.up).unwrap();
-            above.down = new_id;
-            new_point.up = above.id;
-        }
-        new_point.down = cur.id;
-        if cur.left != -1 {
-            new_point.left = new_id - 1;
-        }
-        if cur.right != -1 {
-            new_point.right = new_id + 1;
-        }
-        points.insert(new_id, new_point);
-        update_up_pointer(cur_id, new_id, points);
-        cur_id = cur.right;
-    }
-    return new_id;
-}
-
-fn update_up_pointer(id_to_update: i32, id_to_update_to: i32, points: &mut HashMap<i32, Point>) {
-    let cur = points.get_mut(&id_to_update).unwrap();
-    cur.up = id_to_update_to;
-}
-
-fn update_left_pointer(id_to_update: i32, id_to_update_to: i32, points: &mut HashMap<i32, Point>) {
-    let cur = points.get_mut(&id_to_update).unwrap();
-    cur.left = id_to_update_to;
-}
-
-fn duplicate_col_to_the_left(start_point: i32, points: &mut HashMap<i32, Point>, cur_count: i32) -> i32 {
-    let mut cur_id = start_point;
-    let mut new_id = cur_count;
-    while cur_id != -1 {
-        let cur = points[&cur_id];
-        println!("cur.x = {}, cur.y = {}", cur.initial_x, cur.initial_y);
-        new_id += 1;
-        let mut new_point =  Point { id: new_id, has_star: false, initial_x: cur.initial_x - 1, initial_y: cur.initial_y, left: -1, right: -1, up: -1, down: -1, final_x: -1, final_y: -1 };
-        if cur.left != -1 {
-            let left = points.get_mut(&cur.left).unwrap();
-            left.right = new_id;
-            new_point.left = left.id;
-        }
-        new_point.right = cur.id;
-        if cur.up != -1 {
-            new_point.up = new_id - 1;
-        }
-        if cur.down != -1 {
-            new_point.down = new_id + 1;
-        }
-        points.insert(new_id, new_point);
-        update_left_pointer(cur_id, new_id, points);
-        cur_id = cur.down;
-        println!("New cur_id: {}", cur_id);
-    }
-    return new_id;
-}
-
-fn line_has_star(start_point: i32, points: &mut HashMap<i32, Point>) -> bool {
+fn row_has_star(start_point: i32, points: &mut HashMap<i32, Point>) -> bool {
     let mut cur_id = start_point;
     while cur_id != -1 {
         let cur = points[&cur_id];
