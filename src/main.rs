@@ -1,10 +1,7 @@
 extern crate queues;
 
-use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::hash::{Hash, Hasher};
-use ascii::AsciiChar::g;
+use std::hash::Hash;
 
 fn main() {
     // Part 1.
@@ -16,31 +13,38 @@ fn main() {
         .map(String::from)
         .collect();
 
+    let mut sum = 0;
     for line in lines {
-        solve(line);
+        let cur = solve(line.clone());
+        println!("Line: {} => {}", line, cur);
+        sum += cur;
     }
+    println!("Part 1: {}", sum);
 }
 
-fn solve(line: String) {
-    let parts = line.split(" ").collect();
-    let char_part: String = parts[0];
+fn solve(line: String) -> i32 {
+    let parts: Vec<&str> = line.split(" ").collect();
+    let char_part: &str = parts[0];
     let chars: Vec<char> = char_part.chars().collect();
-    let group_list = parts[1];
-    let groups: Vec<i32> = group_list.filter_map(|word| word.parse().ok())
+    let group_list: &str = parts[1];
+    let groups: Vec<usize> = group_list.split(",").filter_map(|word| word.parse().ok())
         .collect();
-    solve_rec2(0, false, 0, 0, &groups, &chars, -1);
+    return solve_rec2(0, false, 0, 0, &groups, &chars, -1, "".to_string());
 }
 
-fn solve_rec2(pos: usize, in_row: bool, row_size: usize, cur_count: usize, groups: &Vec<usize>, chars: &Vec<char>, group_index: i32) -> i32 {
+fn solve_rec2(pos: usize, in_row: bool, row_size: usize, cur_count: usize, groups: &Vec<usize>, chars: &Vec<char>, group_index: i32, cur_str: String) -> i32 {
+    // println!("Current str: {} ", cur_str);
     // If we've reached the end of the line and we're not in a row, or we are in a row and it's
     // complete, we've found a proper combo!
-    if pos == chars.len() - 1 && !in_row || (in_row && cur_count == row_size) {
+    if pos == chars.len() && (!in_row || (in_row && cur_count == row_size)) && group_index as usize == groups.len() - 1 {
+        // println!("pos = {}, chars.len() = {}, group_index = {}", pos, chars.len(), group_index);
+        // println!("Found proper combo: {}", cur_str);
         return 1;
     } else if pos == chars.len() {
         // This could not be a proper combo.
         return 0;
     }
-    let cur_char = chars.get(&pos).unwrap();
+    let cur_char = chars[pos];
     if cur_char == '.' {
         // If the current char is a ',', check if we were in a row, if we were, then make sure we
         // finished that row.
@@ -50,22 +54,26 @@ fn solve_rec2(pos: usize, in_row: bool, row_size: usize, cur_count: usize, group
                 return 0;
             }
         }
-        return solve_rec2(pos + 1, false, 0, 0, groups, chars, group_index);
+        return solve_rec2(pos + 1, false, 0, 0, groups, chars, group_index, cur_str + ".");
     } else if cur_char == '#' {
         // Get the current group if we're already in a row, or the next group if we're not in a row.
         let mut new_group_index = group_index;
         let mut cur_group: usize = 0;
         if in_row {
-            cur_group = groups[group_index];
+            cur_group = groups[group_index as usize];
         } else {
             new_group_index = group_index + 1;
             if new_group_index >= groups.len() as i32 {
                 return 0;
             }
-            cur_group = groups[new_group_index];
+            cur_group = groups[new_group_index as usize];
         };
+        // If we're already at capacity for this row, then we can't recurse any further, this is a broken combo.
+        if cur_count == cur_group {
+            return 0;
+        }
         // Recurse with in_row set to true.
-        return solve_rec2(pos + 1, true, cur_group, cur_count + 1, groups, chars, new_group_index);
+        return solve_rec2(pos + 1, true, cur_group, cur_count + 1, groups, chars, new_group_index, cur_str + "#");
     } else if cur_char == '?' {
         let mut solutions = 0;
         // Try pretending that the current char is a '#', or that the current char is a '.'.
@@ -75,17 +83,22 @@ fn solve_rec2(pos: usize, in_row: bool, row_size: usize, cur_count: usize, group
             let mut new_group_index = group_index;
             let mut cur_group: usize = 0;
             if in_row {
-                cur_group = groups[group_index];
+                cur_group = groups[group_index as usize];
             } else {
                 new_group_index = group_index + 1;
                 if new_group_index >= groups.len() as i32 {
                     can_recurse = false;
+                } else {
+                    cur_group = groups[new_group_index as usize];
                 }
-                cur_group = groups[new_group_index];
             };
+            // If we're already at capacity for this row, then we can't recurse any further, this is a broken combo.
+            if cur_count == cur_group {
+                can_recurse = false;
+            }
             // Recurse with in_row set to true.
             if can_recurse {
-                solutions += solve_rec2(pos + 1, true, cur_group, cur_count + 1, groups, chars, new_group_index);
+                solutions += solve_rec2(pos + 1, true, cur_group, cur_count + 1, groups, chars, new_group_index, cur_str.clone() + "#");
             }
         }
         {
@@ -98,63 +111,10 @@ fn solve_rec2(pos: usize, in_row: bool, row_size: usize, cur_count: usize, group
                 }
             }
             if can_recurse {
-                solutions += solve_rec2(pos + 1, false, 0, 0, groups, chars, group_index);
+                solutions += solve_rec2(pos + 1, false, 0, 0, groups, chars, group_index, cur_str + ".");
             }
         }
         return solutions;
     }
     panic!("Shouldn't get here!");
-}
-
-fn solve_rec(from_group: usize, groups: &Vec<i32>, from_pos: usize, chars: &Vec<char>) -> i32 {
-    if from_pos >= chars.len() && from_group >= groups.len() {
-        // If we got to the end of the string and we have no more groups, we've found one proper combo.
-        return 1;
-    }
-    if chars[from_pos] == '.' {
-        return solve_rec(from_group, groups, from_pos + 1, chars);
-    }
-    if chars[from_pos] == '#' {
-        let group_fits = group_fits(from_group, groups, from_pos, chars);
-        if !group_fits {
-            return 0;
-        }
-        let next_pos = get_next_pos();
-        return 1 + solve_rec(from_group + 1, groups, next_pos, chars);
-    } else if chars[from_pos] == '?' {
-        // Try assuming this char is a '#'
-        if group_fits_assuming_cur_pos_is_spring() {
-            let next_pos = todo!();
-            // Count number of combos assuming current char is a '#'.
-            let count1 = 1 + solve_rec(from_group + 1, groups, next_pos, chars);
-            // And count number of combos assuming current char is a '.'.
-            let count2 = solve_rec(from_group, groups, from_pos + 1, chars);
-        } else {
-            let count2 = solve_rec(from_group, groups, from_pos + 1, chars);
-            return count2;
-        }
-    }
-    panic!("Shouldn't get here!");
-}
-
-fn group_fits_assuming_cur_pos_is_spring() -> bool {
-    todo!()
-}
-
-fn group_fits(from_group: usize, groups: &Vec<i32>, from_pos: usize, chars: &Vec<char>) -> bool {
-    if from_group >= groups.len() {
-        return false;
-    }
-    let cur_group = groups.get(from_group).unwrap();
-    let mut count = 0;
-    let mut cur_pos = from_pos;
-    while cur_pos < chars.len() && chars[cur_pos] == '#' {
-        cur_pos += 1;
-        count += 1;
-    }
-    return count == cur_group;
-}
-
-fn get_next_pos() -> usize {
-    todo!()
 }
