@@ -1,10 +1,30 @@
+#![feature(linked_list_remove)]
 extern crate queues;
 
+use std::collections::{HashSet, LinkedList};
 use std::fs;
+
+fn hash(input: &str) -> i32 {
+    let mut current = 0;
+    let chars: Vec<char> = input.chars().collect();
+    for char in chars {
+        let ascii = char as char;
+        current += ascii as i32;
+        current *= 17;
+        current = current % 256;
+    }
+    return current;
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct Lens {
+    label: String,
+    focal_length: i32,
+}
 
 fn main() {
     // Part 1.
-    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input14.txt";
+    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input15.txt";
 
     let lines: Vec<String> = fs::read_to_string(file_path)
         .unwrap()
@@ -12,124 +32,68 @@ fn main() {
         .map(String::from)
         .collect();
 
-    let grid: Vec<Vec<char>> = lines.iter()
-        .map(|line| line.chars().collect())
-        .collect();
+    let input = &lines[0];
+    let parts: Vec<&str> = input.split(",").collect();
+    let sum: i32 = parts.iter().map(|str| hash(str)).sum();
+    println!("Part 1: {}", sum);
 
-    println!("Original grid:");
-    print_grid(&grid);
-    let new_grid: Vec<Vec<char>> = fall_east(&grid);
-    println!();
-    println!("East grid:");
-    print_grid(&new_grid);
-    // print_grid(&new_grid);
-    let score = count_score(&new_grid);
-    println!("Part 1: {}", score);
-
-    // Do one cycle.
-    // let north_grid: Vec<Vec<char>> = fall_north(&grid);
-    // let west_grid: Vec<Vec<char>> = fall_west(&north_grid);
-    // let south_grid: Vec<Vec<char>> = fall_south(&west_grid);
-    // let east_grid: Vec<Vec<char>> = fall_east(&south_grid);
-    //
-    // println!("After 1 cycle: ");
-    // print_grid(&east_grid);
-}
-
-fn print_grid(p0: &Vec<Vec<char>>) {
-    for y in 0..p0.len() {
-        for x in 0..p0[0].len() {
-            print!("{}", p0[y][x]);
-        }
-        println!();
+    let mut hash_map: Vec<LinkedList<Lens>> = Vec::with_capacity(256);
+    for _ in 0..256 {
+        hash_map.push(LinkedList::new());
     }
-}
-
-fn count_score(grid: &Vec<Vec<char>>) -> usize {
-    let mut score = 0;
-    for y in 0..grid.len() {
-        for x in 0..grid[0].len() {
-            if grid[y][x] == 'O' {
-                score += grid.len() - y;
-            }
-        }
-    }
-    return score;
-}
-
-
-fn fall_north(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
-    let mut fallen = grid.clone();
-    for y in 0..grid.len() {
-        for x in 0..grid[0].len() {
-            if grid[y][x] == 'O' {
-                // Fall north.
-                let mut new_y = y as i32;
-                fallen[y][x] = '.';
-                while new_y >= 0 && fallen[new_y as usize][x] == '.' {
-                    new_y -= 1;
+    let mut lenses: HashSet<String> = HashSet::new();
+    for part in parts {
+        if part.contains('=') {
+            let lens: Vec<&str> = part.split("=").collect();
+            let label = &lens[0].to_string();
+            lenses.insert(label.to_string());
+            let focal_length: i32 = lens[1].to_string().parse().ok().unwrap();
+            let hash = hash(&label);
+            let list: &mut LinkedList<Lens> = &mut hash_map[hash as usize];
+            let mut inserted = false;
+            for item in list.iter_mut() {
+                if item.label == *label {
+                    item.focal_length = focal_length;
+                    inserted = true;
+                    break;
                 }
-                // println!("Rock in x = {}, y = {} fell from y = {} to y = {}", x, y, y, new_y + 1);
-                fallen[(new_y + 1) as usize][x] = 'O';
             }
-        }
-    }
-    return fallen;
-}
-
-fn fall_south(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
-    let mut fallen = grid.clone();
-    for y in (0..=grid.len()).rev() {
-        for x in 0..grid[0].len() {
-            if grid[y][x] == 'O' {
-                // Fall south.
-                let mut new_y = y as i32;
-                fallen[y][x] = '.';
-                while new_y < grid.len() as i32 && fallen[new_y as usize][x] == '.' {
-                    new_y += 1;
+            if !inserted {
+                let l: Lens = Lens { label: label.to_string(), focal_length };
+                list.push_back(l);
+            }
+        } else if part.contains('-') {
+            let lens: Vec<&str> = part.split("-").collect();
+            let label: String = lens[0].to_string();
+            let hash = hash(&label);
+            let list: &mut LinkedList<Lens> = &mut hash_map[hash as usize];
+            let mut found = false;
+            let mut index = 0;
+            for item in list.iter_mut() {
+                if item.label == label {
+                    found = true;
+                    break;
                 }
-                // println!("Rock in x = {}, y = {} fell from y = {} to y = {}", x, y, y, new_y + 1);
-                fallen[(new_y - 1) as usize][x] = 'O';
+                index += 1;
+            }
+            if found {
+                list.remove(index);
             }
         }
     }
-    return fallen;
-}
-
-fn fall_east(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
-    let mut fallen = grid.clone();
-    for x in (0..grid[0].len()).rev() {
-        for y in 0..grid.len() {
-            if grid[y][x] == 'O' {
-                // Fall east.
-                let mut new_x = x as i32;
-                fallen[y][x] = '.';
-                while new_x < grid[0].len() as i32 && fallen[y][new_x as usize] == '.' {
-                    new_x += 1;
-                }
-                // println!("Rock in x = {}, y = {} fell from x = {} to x = {}", x, y, y, new_y + 1);
-                fallen[y][(new_x - 1) as usize] = 'O';
-            }
+    let mut sum = 0;
+    for i in 0..256 {
+        let list = &hash_map[i];
+        let mut idx = 1;
+        for lens in list {
+            let box_nr = i + 1;
+            let slot = idx;
+            let focal_length = lens.focal_length;
+            let focusing_power = box_nr * slot * focal_length as usize;
+            println!("Focusing power for {} is {}", lens.label, focusing_power);
+            idx += 1;
+            sum += focusing_power;
         }
     }
-    return fallen;
-}
-
-fn fall_west(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
-    let mut fallen = grid.clone();
-    for x in 0..grid[0].len() {
-        for y in 0..grid.len() {
-            if grid[y][x] == 'O' {
-                // Fall west.
-                let mut new_x = x as i32;
-                fallen[y][x] = '.';
-                while new_x >= 0 && fallen[y][new_x as usize] == '.' {
-                    new_x -= 1;
-                }
-                // println!("Rock in x = {}, y = {} fell from x = {} to x = {}", x, y, y, new_y + 1);
-                fallen[y][(new_x + 1) as usize] = 'O';
-            }
-        }
-    }
-    return fallen;
+    println!("Part 2: {}", sum);
 }
