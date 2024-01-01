@@ -1,5 +1,5 @@
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 
@@ -30,8 +30,11 @@ fn main() {
         .map(|line| line.chars().collect())
         .collect();
 
-    let min_heat_loss = dijkstra(&grid);
+    let min_heat_loss = dijkstra(&grid, 1, 3);
     println!("Part 1: {}", min_heat_loss);
+
+    let min_heat_loss_ultra = dijkstra(&grid, 4, 10);
+    println!("Part 2: {}", min_heat_loss_ultra);
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -64,9 +67,7 @@ impl PartialOrd for State {
     }
 }
 
-fn dijkstra(grid: &Vec<Vec<char>>) -> i32 {
-    let mut dist: HashMap<Pos, i32> = HashMap::new();
-    let mut prev: HashMap<Pos, Pos> = HashMap::new();
+fn dijkstra(grid: &Vec<Vec<char>>, min_steps: i8, max_steps: i8) -> i32 {
     let mut min_heap: BinaryHeap<Reverse<State>> = BinaryHeap::new();
     let up = Pos { x: 0, y: -1 };
     let down = Pos { x: 0, y: 1 };
@@ -93,7 +94,7 @@ fn dijkstra(grid: &Vec<Vec<char>>) -> i32 {
         let cur_moves_in_one_dir = u.steps;
         let cur_pos = u.pos;
         for dir in dirs.clone() {
-            if dir == last_dir && cur_moves_in_one_dir == 3 {
+            if dir == last_dir && cur_moves_in_one_dir == max_steps {
                 continue;
             }
             if dir == up && last_dir == down {
@@ -108,27 +109,35 @@ fn dijkstra(grid: &Vec<Vec<char>>) -> i32 {
             if dir == right && last_dir == left {
                 continue;
             }
-            let new_pos = Pos { x: cur_pos.x + dir.x, y: cur_pos.y + dir.y};
+            let mut new_pos = Pos { x: cur_pos.x + dir.x, y: cur_pos.y + dir.y};
             if new_pos.x < 0 || new_pos.x >= grid[0].len() as i32 {
                 continue;
             }
             if new_pos.y < 0 || new_pos.y >= grid.len() as i32 {
                 continue;
             }
+            let char = grid[new_pos.y as usize][new_pos.x as usize];
+            let mut loss: i32 = char.to_string().parse().ok().unwrap();
             let new_steps = if dir == last_dir {
                 cur_moves_in_one_dir + 1
             } else {
-                1
+                // move at least min_steps in this dir
+                for _ in 0..min_steps-1 {
+                    new_pos = Pos { x: new_pos.x + dir.x, y: new_pos.y + dir.y};
+                    if new_pos.x < 0 || new_pos.x >= grid[0].len() as i32 {
+                        break;
+                    }
+                    if new_pos.y < 0 || new_pos.y >= grid.len() as i32 {
+                        break;
+                    }
+                    let char = grid[new_pos.y as usize][new_pos.x as usize];
+                    let new_loss: i32 = char.to_string().parse().ok().unwrap();
+                    loss += new_loss;
+                }
+                min_steps
             };
-            let char = grid[new_pos.y as usize][new_pos.x as usize];
-            let loss: i32 = char.to_string().parse().ok().unwrap();
             let new_state = State { heat: u.heat + loss, pos: Pos{ x: new_pos.x, y: new_pos.y}, dir: dir.clone(), steps: new_steps};
             min_heap.push(Reverse(new_state));
-            let heat = dist.entry(new_state.pos).or_insert(999999).clone();
-            if new_state.heat < heat {
-                dist.insert(new_state.pos, new_state.heat);
-                prev.insert(new_state.pos, u.pos);
-            }
         }
     }
     panic!("Should not get here!");
