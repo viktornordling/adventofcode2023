@@ -46,6 +46,7 @@ fn main() {
             if c.is_numeric() {
                 nums.push(c);
             } else {
+                // two1nine 2 + 9 = '2' + '9' = "29"
                 let substring = line.index(index..);
                 for num in num_map.keys() {
                     if (substring.starts_with(num)) {

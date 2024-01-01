@@ -1,10 +1,7 @@
-extern crate queues;
-
-use std::cmp::max;
-use std::collections::{HashMap, HashSet};
+use std::cmp::{min, Reverse};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
-
 use queues::{IsQueue, Queue};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -22,7 +19,7 @@ impl Hash for Pos {
 
 fn main() {
     // Part 1.
-    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input16.txt";
+    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input17.txt";
 
     let lines: Vec<String> = fs::read_to_string(file_path)
         .unwrap()
@@ -34,90 +31,155 @@ fn main() {
         .map(|line| line.chars().collect())
         .collect();
 
-    let up = Pos { x: 0, y: -1 };
-    let down = Pos { x: 0, y: 1 };
-    let left = Pos { x: -1, y: 0 };
     let right = Pos { x: 1, y: 0 };
-
-    println!("Part 1: {}", simulate_ray(&grid, Pos { x: 0, y: 0 }, right));
-
-    let mut max_energy = 0;
-    for y in 0..grid.len() {
-        // Ray from left to right
-        max_energy = max(max_energy, simulate_ray(&grid, Pos { x: 0, y: y as i32 }, right));
-        // Ray from right to left
-        max_energy = max(max_energy, simulate_ray(&grid, Pos { x: (grid[0].len() - 1) as i32, y: y as i32 }, left));
-    }
-
-    for x in 0..grid[0].len() {
-        // Ray from top to bottom
-        max_energy = max(max_energy, simulate_ray(&grid, Pos { x: x as i32, y: 0 }, down));
-        // Ray from bottom to top
-        max_energy = max(max_energy, simulate_ray(&grid, Pos { x: x as i32, y: (grid.len() - 1) as i32 }, up));
-    }
-
-    println!("Part 2: {}", max_energy);
+    let mut seen = HashSet::new();
+    let mut cur_path = Vec::new();
+    let mut cache = HashMap::new();
+    let min_heat_loss = dfs(Pos { x: 0, y: 0 }, right, 0i8, 0, &grid, &mut seen, &mut cur_path, &mut cache);
+    println!("Part 1: {}", min_heat_loss);
 }
 
-fn simulate_ray(grid: &Vec<Vec<char>>, start_pos: Pos, start_dir: Pos) -> usize {
-    let up = Pos { x: 0, y: -1 };
-    let down = Pos { x: 0, y: 1 };
-    let left = Pos { x: -1, y: 0 };
-    let right = Pos { x: 1, y: 0 };
+struct State {
+    pos: Pos,
+    dir: Pos,
+    steps: i8,
+}
 
-    let bounce: HashMap<(char, Pos), Pos> = HashMap::from([
-        (('/', up), right),
-        (('/', down), left),
-        (('/', left), down),
-        (('/', right), up),
-        (('\\', up), left),
-        (('\\', down), right),
-        (('\\', left), up),
-        (('\\', right), down),
-    ]);
-
-    let mut walk: Vec<Vec<char>> = grid.clone();
-
-    let mut seen: HashSet<(Pos, Pos)> = HashSet::new();
-    let mut energized: HashSet<Pos> = HashSet::new();
-    let mut rays: Queue<(Pos, Pos)> = Queue::new();
-    _ = rays.add((start_pos, start_dir));
-    while rays.size() > 0 {
-        let cur_ray = rays.remove().unwrap();
-        // println!("Following ray {:?} in dir {:?}", cur_ray.0, cur_ray.1);
-        let mut cur_pos = cur_ray.0;
-        let mut cur_dir = cur_ray.1;
-        while !seen.contains(&(cur_pos, cur_dir)) {
-            // sleep(Duration::from_millis(500));
-            seen.insert((cur_pos, cur_dir));
-            if cur_pos.x < 0 || cur_pos.x >= grid[0].len() as i32 {
-                break;
-            }
-            if cur_pos.y < 0 || cur_pos.y >= grid.len() as i32 {
-                break;
-            }
-            //walk[cur_pos.y as usize][cur_pos.x as usize] = dirs.get(&cur_dir).unwrap().clone();
-            walk[cur_pos.y as usize][cur_pos.x as usize] = '#';
-            // print_grid(&walk);
-            let cur_char: char = grid[cur_pos.y as usize][cur_pos.x as usize];
-            // println!("Current pos: {:?}, current dir: {:?}, current char: {}", cur_pos, cur_dir, cur_char);
-            energized.insert(cur_pos);
-            if cur_char == '|' && (cur_dir == right || cur_dir == left) {
-                cur_dir = down;
-                _ = rays.add((cur_pos, up));
-            } else if cur_char == '-' && (cur_dir == up || cur_dir == down) {
-                cur_dir = right;
-                _ = rays.add((cur_pos, left));
-            } else if cur_char == '/' || cur_char == '\\' {
-                cur_dir = bounce.get(&(cur_char, cur_dir)).unwrap().clone();
-            }
-            cur_pos = Pos { x: cur_pos.x + cur_dir.x, y: cur_pos.y + cur_dir.y };
+//  1  function Dijkstra(Graph, source):
+//  2
+//  3      for each vertex v in Graph.Vertices:
+//  4          dist[v] ← INFINITY
+//  5          prev[v] ← UNDEFINED
+//  6          add v to Q
+//  7      dist[source] ← 0
+//  8
+//  9      while Q is not empty:
+// 10          u ← vertex in Q with min dist[u]
+// 11          remove u from Q
+// 12
+// 13          for each neighbor v of u still in Q:
+// 14              alt ← dist[u] + Graph.Edges(u, v)
+// 15              if alt < dist[v]:
+// 16                  dist[v] ← alt
+// 17                  prev[v] ← u
+// 18
+// 19      return dist[], prev[]
+fn dijkstra(grid: &Vec<Vec<char>>) {
+    let mut dist: HashMap<Pos, i32> = HashMap::new();
+    let mut prev: HashMap<State, Option<Pos>> = HashMap::new();
+    let mut min_heap: BinaryHeap<Reverse<Pos>> = BinaryHeap::new();
+    for y in 0..grid.len() {
+        for x in 0..grid[0].len() {
+            dist.insert(Pos{x: x as i32, y: y as i32}, 999999);
+            prev.insert(Pos{x: x as i32, y: y as i32}, None);
+            _ = min_heap.push(Reverse(Pos{x: x as i32, y: y as i32}));
         }
     }
-    return energized.len();
+    dist.insert(State{ pos: Pos{ x: 0, y: 0}, 0);
+
+    while min_heap.len() > 0 {
+        let u = min_heap.pop();
+
+    }
 }
 
-fn _print_grid(grid: &Vec<Vec<char>>) {
+fn dfs(
+    cur_pos: Pos,
+    last_dir: Pos,
+    cur_moves_in_one_dir: i8,
+    heat_loss: i32,
+    grid: &Vec<Vec<char>>,
+    seen: &mut HashSet<Pos>,
+    cur_path: &mut Vec<(Pos, Pos)>,
+    cache: &mut HashMap<(Pos, Pos, i8), (i32, i32)>
+) -> i32 {
+    if cache.contains_key(&(cur_pos, last_dir, cur_moves_in_one_dir)) {
+        let cached_loss = cache.get(&(cur_pos, last_dir, cur_moves_in_one_dir)).unwrap().clone();
+        if cached_loss.0 < heat_loss {
+            return cached_loss.1;
+        }
+    }
+    let up = Pos { x: 0, y: -1 };
+    let down = Pos { x: 0, y: 1 };
+    let left = Pos { x: -1, y: 0 };
+    let right = Pos { x: 1, y: 0 };
+
+    let dir_chars = HashMap::from([
+        (up, '^'),
+        (down, 'v'),
+        (left, '<'),
+        (right, '>'),
+    ]);
+
+    // println!("Current pos: {:?}, heat_loss: {}, cur_moves_in_one_dir: {}", cur_pos, heat_loss, cur_moves_in_one_dir);
+    if cur_pos.x == grid[0].len() as i32 - 1 && grid.len() as i32 - 1 == cur_pos.y {
+        // println!("Reached the goal. Path is: {:?}", cur_path);
+        // let mut map = grid.clone();
+        // for pos in cur_path {
+        //     let char = dir_chars.get(&pos.1).unwrap();
+        //     map[pos.0.y as usize][pos.0.x as usize] = char.clone();
+        // }
+        // println!("Reached the goal with heat loss {}", heat_loss);
+        // print_grid(&map);
+        // println!();
+        return heat_loss;
+    }
+
+    let dirs = vec![up, down, left, right];
+
+    let mut lowest_heat_loss = 999999;
+
+    for dir in dirs {
+        if dir == last_dir && cur_moves_in_one_dir == 3 {
+            continue;
+        }
+        if dir == up && last_dir == down {
+            continue;
+        }
+        if dir == down && last_dir == up {
+            continue;
+        }
+        if dir == left && last_dir == right {
+            continue;
+        }
+        if dir == right && last_dir == left {
+            continue;
+        }
+        let new_pos = Pos { x: cur_pos.x + dir.x, y: cur_pos.y + dir.y};
+        if seen.contains(&new_pos) {
+            continue;
+        }
+        if new_pos.x < 0 || new_pos.x >= grid[0].len() as i32 {
+            continue;
+        }
+        if new_pos.y < 0 || new_pos.y >= grid.len() as i32 {
+            continue;
+        }
+        let new_moves_in_dir = if dir == last_dir {
+            cur_moves_in_one_dir + 1
+        } else {
+            1
+        };
+        let char = grid[new_pos.y as usize][new_pos.x as usize];
+        let loss: i32 = char.to_string().parse().ok().unwrap();
+        cur_path.push((new_pos, dir));
+        seen.insert(cur_pos);
+        // if cur_pos.y == 3 && cur_pos.x == 1 {
+        //     println!("Trying to move {:?}", dir);
+        // }
+        let rest_heat_loss = dfs(new_pos, dir, new_moves_in_dir, heat_loss + loss, grid, seen, cur_path, cache);
+        // if cur_pos.y == 3 && cur_pos.x == 1 {
+        //     println!("Result of dfs: {}", rest_heat_loss);
+        // }
+        seen.remove(&cur_pos);
+        cur_path.remove(cur_path.len() - 1);
+        lowest_heat_loss = min(lowest_heat_loss, rest_heat_loss);
+    }
+    cache.insert((cur_pos, last_dir, cur_moves_in_one_dir), (heat_loss, lowest_heat_loss));
+    return lowest_heat_loss;
+}
+
+fn print_grid(grid: &Vec<Vec<char>>) {
     for y in 0..grid.len() {
         for x in 0..grid[0].len() {
             print!("{}", grid[y][x]);
