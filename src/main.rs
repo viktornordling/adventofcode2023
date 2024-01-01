@@ -95,6 +95,10 @@ fn dijkstra(grid: &Vec<Vec<char>>) -> i32 {
     while min_heap.len() > 0 {
         let u = min_heap.pop().unwrap().0;
         // println!("Popped state: {:?}", u);
+        if seen.contains(&u) {
+            // println!("already seen {:?}", u);
+            continue;
+        }
         seen.insert(u);
         let last_dir = u.dir;
         let cur_moves_in_one_dir = u.steps;
@@ -130,12 +134,7 @@ fn dijkstra(grid: &Vec<Vec<char>>) -> i32 {
             let char = grid[new_pos.y as usize][new_pos.x as usize];
             let loss: i32 = char.to_string().parse().ok().unwrap();
             let new_state = State { heat: u.heat + loss, pos: Pos{ x: new_pos.x, y: new_pos.y}, dir: dir.clone(), steps: new_steps};
-            if !seen.contains(&new_state) {
-                println!("seen.len: {}", seen.len());
-                min_heap.push(Reverse(new_state));
-            } else {
-                println!("Already seen state: {:?}", new_state);
-            }
+            min_heap.push(Reverse(new_state));
             let heat = dist.entry(new_state.pos).or_insert(999999).clone();
             if new_state.heat < heat {
                 dist.insert(new_state.pos, new_state.heat);
