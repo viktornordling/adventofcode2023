@@ -80,46 +80,18 @@ fn main() {
     let sum: i32 = parts2.iter().filter(|p| apply_workflows(&p, &workflows)).map(|p| get_val(&p)).sum();
     println!("Part 1: {}", sum);
 
-    // let max_nr = 1353;
-    // let min_nr = 1349;
-    //
-    // let mut accepted = 0;
-    //
-    // for x in min_nr..=max_nr {
-    //     for m in min_nr..=max_nr {
-    //         for a in min_nr..=max_nr {
-    //             for s in min_nr..=max_nr {
-    //                 let part: Part = create_part(x, m, a, s);
-    //                 if apply_workflows(&part, &workflows) {
-    //                     // println!("x = {}, m = {}, a = {}, s = {}, Accepted", x, m, a, s);
-    //                     accepted += 1;
-    //                 } else {
-    //                     // println!("x = {}, m = {}, a = {}, s = {}, Rejected", x, m, a, s);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-    // println!("Num accepted: {}", accepted);
-    // let wf_map: HashMap<&String, &Workflow> = workflows.into_iter().map(|w| (&w.name, w)).collect();
     let wf_map: HashMap<&String, &Workflow> = this_function_should_not_be_needed(&workflows);
     let bounds = Bounds::new();
     let mut seen: HashSet<String> = HashSet::new();
     let bounds = dfs(&wf_map, wf_map.get(&"in".to_string()).unwrap(), &bounds, &mut seen);
-    // println!("Found {} bounds", bounds.len());
     let mut combos: i64 = 0;
     for bound in &bounds {
         let map = &bound.bounds;
         let mut product: i64 = 1;
         for bound in map {
             let interval: i64 = max(0, bound.1.upper as i64 - bound.1.lower as i64 + 1);
-            // println!("{} interval: {}", bound.0, interval);
             product *= interval;
-            // println!("prod = {}", product);
         }
-        // if product > 0 {
-        //     println!("Bounds: {:?}", &bound);
-        // }
         combos += product;
     }
     println!("Part 2: {}", combos);
@@ -163,19 +135,14 @@ impl Bounds {
 fn dfs(workflows: &HashMap<&String, &Workflow>, cur_workflow: &Workflow, bounds: &Bounds, seen: &mut HashSet<String>) -> Vec<Bounds> {
     let mut result: Vec<Bounds> = Vec::new();
     seen.insert(cur_workflow.name.to_string());
-    // println!("Cloning");
     let mut cur_bounds = bounds.clone();
     for rule in &cur_workflow.rules {
-        // println!("cur_bounds is now {:?}", cur_bounds);
         if rule.accept_all {
-            // println!("Found accept ALL rule");
             result.push(cur_bounds.clone());
-            // println!("bounds is now: {:?}", result);
         } else if rule.var.is_some() {
             let var = rule.var.as_ref().unwrap();
             let cmp = rule.cmp_char;
             let cmp_nr = rule.cmp_nr;
-            // println!("update bounds 1");
             let new_bounds = update_bounds(&cur_bounds, var, cmp, cmp_nr, false);
             if rule.next_workflow.as_ref().unwrap() == "R" {
                 let cmp_opposite = if rule.cmp_char == '>' {
@@ -183,20 +150,15 @@ fn dfs(workflows: &HashMap<&String, &Workflow>, cur_workflow: &Workflow, bounds:
                 } else {
                     '>'
                 };
-                // println!("update bounds 2");
                 cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
-                // println!("Next is reject. cur_bounds is now {:?}", cur_bounds);
                 continue;
             } else if rule.next_workflow.as_ref().unwrap() == "A" {
-                // println!("Found accept rule");
                 result.push(new_bounds);
-                // println!("bounds is now: {:?}", result);
                 let cmp_opposite = if rule.cmp_char == '>' {
                     '<'
                 } else {
                     '>'
                 };
-                // println!("update bounds 3");
                 cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
                 continue;
             }
@@ -207,15 +169,12 @@ fn dfs(workflows: &HashMap<&String, &Workflow>, cur_workflow: &Workflow, bounds:
                     result.push(sbounds);
                 }
             }
-            // In order to proceed to the next rule, the given rule must not be met, so update the bounds to the other side of the bounds.
             let cmp_opposite = if rule.cmp_char == '>' {
                 '<'
             } else {
                 '>'
             };
-            // println!("update bounds 4, before: {:?}", cur_bounds);
             cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
-            // println!("update bounds 4, after: {:?}", cur_bounds);
         } else if rule.reject_all {
             // Do nothing.
         } else {
