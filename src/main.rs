@@ -1,282 +1,178 @@
-use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Index;
+use num::Integer;
+use queues::{IsQueue, Queue};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct Rule {
-    var: Option<String>,
-    cmp_char: char,
-    cmp_nr: i32,
-    accept_all: bool,
-    reject_all: bool,
-    next_workflow: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct Part {
-    vars: HashMap<String, i32>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct Workflow {
+struct Module {
     name: String,
-    rules: Vec<Rule>,
+    module_type: Option<char>,
+    children: Vec<String>,
 }
 
-fn parse_workflow(str: &String) -> Workflow {
-    let workflow_name = str.index(0..str.find("{").unwrap());
-    let rules = str.index(str.find("{").unwrap() + 1..str.find("}").unwrap());
-    let parts: Vec<&str> = rules.split(",").collect();
-    let mut rule_vec: Vec<Rule> = Vec::new();
-    for part in parts {
-        if part.contains(':') {
-            let rule_parts: Vec<&str> = part.split(":").collect();
-            let part_1 = rule_parts[0];
-            let mut cmp_char = '<';
-            let pp: Vec<&str> = if part_1.contains('<') {
-                part_1.split('<').collect()
-            } else {
-                cmp_char = '>';
-                part_1.split('>').collect()
-            };
-            let cmp_nr: i32 = pp.get(1).unwrap().parse().ok().unwrap();
-            let var = pp.get(0).unwrap();
-            let next = rule_parts[1];
-            rule_vec.push(Rule { var: Option::from(var.to_string()), cmp_char, cmp_nr, accept_all: false, reject_all: false, next_workflow: Option::from(next.to_string()) })
-        } else if part == "R" {
-            rule_vec.push(Rule { var: None, cmp_char: '_', cmp_nr: 0, accept_all: false, reject_all: true, next_workflow: None })
-        } else if part == "A" {
-            rule_vec.push(Rule { var: None, cmp_char: '_', cmp_nr: 0, accept_all: true, reject_all: false, next_workflow: None })
-        } else {
-            // This should just be the name of the next workflow
-            rule_vec.push(Rule { var: None, cmp_char: '_', cmp_nr: 0, accept_all: false, reject_all: false, next_workflow: Option::from(part.to_string()) })
-        }
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct Signal {
+    name: String,
+    high: bool,
+    from: String,
+}
+
+impl Signal {
+    fn new(name: String, high: bool, from: String) -> Self {
+        Signal { name, high, from }
     }
-    return Workflow { name: workflow_name.to_string(), rules: rule_vec };
+}
+
+
+fn parse_module(str: &String) -> Module {
+    let parts: Vec<&str> = str.split("->").map(|s| s.trim()).collect();
+    let name_part = parts[0];
+    let mut module_type: Option<char> = None;
+    let name = if name_part.starts_with("%") || name_part.starts_with("&") {
+        module_type = name_part.chars().nth(0);
+        name_part.index(1..).to_string()
+    } else {
+        name_part.to_string()
+    };
+    let children: Vec<String> = parts[1].split(",").map(|s| s.trim()).map(|s| s.to_string()).collect();
+    return Module { name, children, module_type };
 }
 
 fn main() {
     // Part 1.
-    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input19.txt";
+    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input20.txt";
 
-    let input = fs::read_to_string(file_path).unwrap();
-    let parts: Vec<&str> = input.split("\n\n").collect();
-
-    let rule_part: &str = &parts[0];
-    let parts_part: &str = &parts[1];
-    let workflows: Vec<Workflow> = rule_part
+    let lines: Vec<String> = fs::read_to_string(file_path)
+        .unwrap()
         .lines()
         .map(String::from)
-        .map(|s| parse_workflow(&s))
         .collect();
 
-    let parts2: Vec<Part> = parts_part
-        .lines()
-        .map(String::from)
-        .map(|s| parse_part(&s))
+    let modules: Vec<Module> = lines
+        .iter()
+        .map(|s| parse_module(&s))
         .collect();
 
-    let sum: i32 = parts2.iter().filter(|p| apply_workflows(&p, &workflows)).map(|p| get_val(&p)).sum();
-    println!("Part 1: {}", sum);
+    let result = run_signals(&modules, 10000000);
 
-    let wf_map: HashMap<&String, &Workflow> = this_function_should_not_be_needed(&workflows);
-    let bounds = Bounds::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    let bounds = dfs(&wf_map, wf_map.get(&"in".to_string()).unwrap(), &bounds, &mut seen);
-    let mut combos: i64 = 0;
-    for bound in &bounds {
-        let map = &bound.bounds;
-        let mut product: i64 = 1;
-        for bound in map {
-            let interval: i64 = max(0, bound.1.upper as i64 - bound.1.lower as i64 + 1);
-            product *= interval;
-        }
-        combos += product;
-    }
-    println!("Part 2: {}", combos);
+    println!("Part 1: {}", result.0 * result.1);
 }
 
-fn this_function_should_not_be_needed(workflows: &Vec<Workflow>) -> HashMap<&String, &Workflow> {
-    return workflows.into_iter().map(|w| (&w.name, w)).collect();
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct Bound {
-    lower: i32,
-    upper: i32,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct Bounds {
-    bounds: BTreeMap<String, Bound>,
-}
-
-impl Bounds {
-    fn new() -> Self {
-        let min_bound = 1;
-        let max_bound = 4000;
-        let x_bounds = Bound { lower: min_bound, upper: max_bound };
-        let m_bounds = Bound { lower: min_bound, upper: max_bound };
-        let a_bounds = Bound { lower: min_bound, upper: max_bound };
-        let s_bounds = Bound { lower: min_bound, upper: max_bound };
-
-        Bounds {
-            bounds: BTreeMap::from([
-                ("x".to_string(), x_bounds),
-                ("m".to_string(), m_bounds),
-                ("a".to_string(), a_bounds),
-                ("s".to_string(), s_bounds),
-            ])
-        }
-    }
-}
-
-fn dfs(workflows: &HashMap<&String, &Workflow>, cur_workflow: &Workflow, bounds: &Bounds, seen: &mut HashSet<String>) -> Vec<Bounds> {
-    let mut result: Vec<Bounds> = Vec::new();
-    seen.insert(cur_workflow.name.to_string());
-    let mut cur_bounds = bounds.clone();
-    for rule in &cur_workflow.rules {
-        if rule.accept_all {
-            result.push(cur_bounds.clone());
-        } else if rule.var.is_some() {
-            let var = rule.var.as_ref().unwrap();
-            let cmp = rule.cmp_char;
-            let cmp_nr = rule.cmp_nr;
-            let new_bounds = update_bounds(&cur_bounds, var, cmp, cmp_nr, false);
-            if rule.next_workflow.as_ref().unwrap() == "R" {
-                let cmp_opposite = if rule.cmp_char == '>' {
-                    '<'
-                } else {
-                    '>'
-                };
-                cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
-                continue;
-            } else if rule.next_workflow.as_ref().unwrap() == "A" {
-                result.push(new_bounds);
-                let cmp_opposite = if rule.cmp_char == '>' {
-                    '<'
-                } else {
-                    '>'
-                };
-                cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
-                continue;
-            }
-            let next_workflow = workflows.get(rule.next_workflow.as_ref().unwrap()).unwrap();
-            if !seen.contains(&next_workflow.name) {
-                let sub_result = dfs(workflows, next_workflow, &new_bounds, seen);
-                for sbounds in sub_result {
-                    result.push(sbounds);
-                }
-            }
-            let cmp_opposite = if rule.cmp_char == '>' {
-                '<'
-            } else {
-                '>'
-            };
-            cur_bounds = update_bounds(&cur_bounds, var, cmp_opposite, cmp_nr, true);
-        } else if rule.reject_all {
-            // Do nothing.
-        } else {
-            // This should be a final else
-            let next_workflow = workflows.get(rule.next_workflow.as_ref().unwrap()).unwrap();
-            if !seen.contains(&next_workflow.name) {
-                let sub_result = dfs(workflows, next_workflow, &cur_bounds, seen);
-                for bounds in sub_result {
-                    result.push(bounds);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-fn update_bounds(bounds: &Bounds, var: &String, comp: char, limit: i32, inclusive: bool) -> Bounds {
-    let mut map = bounds.bounds.clone();
-    let cur_bound = map.get(var).unwrap();
-    let mut append = 0;
-    if !inclusive {
-        if comp == '>' {
-            append = 1;
-        } else {
-            append = -1;
-        }
-    }
-    let new_bound = if comp == '>' {
-        Bound { lower: max(cur_bound.lower, limit + append), upper: cur_bound.upper }
-    } else {
-        Bound { lower: cur_bound.lower, upper: min(cur_bound.upper, limit + append) }
-    };
-    map.insert(var.to_string(), new_bound);
-    Bounds { bounds: map }
-}
-
-fn create_part(x: i32, m: i32, a: i32, s: i32) -> Part {
-    let map: HashMap<String, i32> = HashMap::from([
-        ("x".to_string(), x),
-        ("m".to_string(), m),
-        ("a".to_string(), a),
-        ("s".to_string(), s),
+fn run_signals(modules: &Vec<Module>, iterations: i64) -> (i64, i64) {
+    let mut high_signals = 0;
+    let mut low_signals = 0;
+    let module_map = this_function_should_not_be_needed(&modules);
+    let input_map: HashMap<String, Vec<String>> = this_function_should_also_not_be_needed(&modules);
+    let mut module_states: HashMap<String, bool> = HashMap::new();
+    let mut memory_states: HashMap<String, HashMap<String, bool>> = HashMap::new();
+    let mut signal_queue: Queue<Signal> = Queue::new();
+    let invs = HashSet::from([
+        "xj".to_string(),
+        "qs".to_string(),
+        "kz".to_string(),
+        "km".to_string(),
     ]);
-    return Part { vars: map };
-}
 
-fn get_val(part: &Part) -> i32 {
-    return part.vars.values().sum();
-}
+    for module in modules {
+        if module.module_type.is_some_and(|x| x == '&') {
+            memory_states.insert(module.name.to_string(), HashMap::new());
+        }
+    }
+    let dummy = &Module { name: "dummy".to_string(), children: Vec::new(), module_type: None };
+    let mut first_high: HashMap<String, i64> = HashMap::new();
+    let mut periodicities: HashMap<String, i64> = HashMap::new();
 
-fn apply_workflows(part: &Part, workflows: &Vec<Workflow>) -> bool {
-    let wf_map: HashMap<&String, &Workflow> = workflows.into_iter().map(|w| (&w.name, w)).collect();
-    let mut cur_wf: &Workflow = wf_map.get(&"in".to_string()).unwrap();
-    let mut done = false;
-    let mut accepted = false;
-    while !done {
-        for rule in &cur_wf.rules {
-            if rule.accept_all {
-                accepted = true;
-                done = true;
-                break;
-            } else if rule.reject_all {
-                done = true;
-                break;
-            } else if !rule.var.is_some() {
-                cur_wf = wf_map.get(&rule.next_workflow.as_ref().unwrap()).unwrap();
-                break;
+    for i in 0..iterations {
+        _ = signal_queue.add(Signal::new("broadcaster".to_string(), false, "button".to_string()));
+
+        while signal_queue.size() > 0 {
+            let signal = signal_queue.remove().unwrap();
+            if signal.name == "rx" && signal.high == false {
+                println!("Part 2: {}", i);
+            }
+            if signal.high {
+                high_signals += 1;
             } else {
-                let var = rule.var.as_ref().unwrap();
-                let val = part.vars.get(var).unwrap();
-                let applies = if rule.cmp_char == '>' && val > &rule.cmp_nr {
-                    true
-                } else if rule.cmp_char == '<' && val < &rule.cmp_nr {
-                    true
-                } else {
-                    false
-                };
-                if applies {
-                    let next = rule.next_workflow.as_ref().unwrap();
-                    if next == "A" {
-                        accepted = true;
-                        done = true;
-                        break;
-                    } else if next == "R" {
-                        done = true;
-                        break;
+                low_signals += 1;
+            }
+            // println!("Current signal: {:?}", signal);
+            let cur_mod_name = signal.name.to_string();
+            let cur_module = module_map.get(&cur_mod_name).unwrap_or_else(|| &dummy);
+            match cur_module.module_type {
+                None => {
+                    for module in &cur_module.children {
+                        _ = signal_queue.add(Signal::new(module.to_string(), false, cur_mod_name.to_string()))
                     }
-                    cur_wf = wf_map.get(next).unwrap();
-                    break;
+                }
+                Some('%') => {
+                    // Handle flip flop module.
+                    if signal.high {
+                        // Ignore high signal
+                    } else {
+                        let new_state = !module_states.get(&cur_mod_name).unwrap_or_else(|| &false);
+                        module_states.insert(cur_mod_name.clone(), new_state);
+                        for module in &cur_module.children {
+                            _ = signal_queue.add(Signal::new(module.to_string(), new_state, cur_mod_name.to_string()))
+                        }
+                    }
+                }
+                Some('&') => {
+                    // Handle conjunction module.
+                    let inputs = input_map.get(&cur_mod_name).unwrap();
+                    let memory = memory_states.get_mut(&cur_mod_name).unwrap();
+                    memory.insert(signal.from, signal.high);
+                    let mut all_high = true;
+                    for input in inputs {
+                        if !memory.get(input).unwrap_or_else(|| &false) {
+                            all_high = false;
+                            break;
+                        }
+                    }
+                    if invs.contains(&cur_mod_name) {
+                        if !all_high {
+                            if !first_high.contains_key(&cur_mod_name) {
+                                first_high.insert(cur_mod_name.to_string(), i);
+                            } else if !periodicities.contains_key(&cur_mod_name) {
+                                periodicities.insert(cur_mod_name.to_string(), i - first_high.get(&cur_mod_name).unwrap());
+                            }
+                            if periodicities.len() == invs.len() {
+                                println!("We've got all periodicities now.");
+                                let mut lcm = 1i64;
+                                for cycle in periodicities.values() {
+                                    lcm = lcm.lcm(&(cycle));
+                                }
+                                println!("Part 2: {}", lcm);
+                            }
+                            println!("inv: {}, out signal: {}, iterations: {}", cur_mod_name, !all_high, i);
+                        }
+                    }
+                    for module in &cur_module.children {
+                        _ = signal_queue.add(Signal::new(module.to_string(), !all_high, cur_mod_name.to_string()))
+                    }
+                }
+                Some(_) => {
+                    panic!("Unknown module type");
                 }
             }
         }
     }
-    return accepted;
+    return (high_signals, low_signals);
 }
 
-fn parse_part(part: &String) -> Part {
-    let parts: Vec<&str> = part.index(1..part.len() - 1).split(",").collect();
-    let mut map: HashMap<String, i32> = HashMap::new();
-    for p in parts {
-        let s: Vec<&str> = p.split("=").collect();
-        map.insert(s[0].to_string(), s[1].parse().ok().unwrap());
-    }
-    return Part { vars: map };
+fn this_function_should_not_be_needed(modules: &Vec<Module>) -> HashMap<&String, &Module> {
+    return modules.into_iter().map(|m| (&m.name, m)).collect();
 }
+
+fn this_function_should_also_not_be_needed(modules: &Vec<Module>) -> HashMap<String, Vec<String>> {
+    let mut result: HashMap<String, Vec<String>> = HashMap::new();
+    for module in modules {
+        for child in &module.children {
+            result.entry(child.to_string())
+                .or_insert_with(Vec::new)
+                .push(module.name.clone());
+        }
+    }
+    result
+}
+

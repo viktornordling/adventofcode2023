@@ -26,7 +26,6 @@ fn seed_in_range(seed: i64, range: &SeedRange) -> bool {
 }
 
 fn find_location(seed: i64, maps: &Vec<Vec<SeedRange>>) -> i64 {
-    // println!("Finding location for seed {}", seed);
     let mut cur = seed;
     for map in maps {
         for range in map.iter() {
@@ -36,7 +35,6 @@ fn find_location(seed: i64, maps: &Vec<Vec<SeedRange>>) -> i64 {
                 break;
             }
         }
-        // println!("cur is now {}", cur);
     }
     return cur;
 }
@@ -95,19 +93,14 @@ fn main() {
         .collect();
 
     while idx < seeds2.len() {
-        println!("idx = {}", idx);
         let start = seeds2[idx];
         let len = seeds2[idx + 1];
-        println!("start = {}, len = {}, end = {}", start, len, start + len);
         let mut j = start;
         while j < start + len {
             let seed = j;
             let loc = find_location(seed, &result);
             lowest = min(lowest, loc);
             j += 1;
-            if j % 1000000 == 0 {
-                println!("j = {}, lowest = {}", j, lowest);
-            }
         }
         idx += 2;
     }
