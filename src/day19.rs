@@ -52,29 +52,29 @@ fn parse_workflow(str: &String) -> Workflow {
             // This should just be the name of the next workflow
             rule_vec.push(Rule { var: None, cmp_char: '_', cmp_nr: 0, accept_all: false, reject_all: false, next_workflow: Option::from(part.to_string()) })
         }
+        fn main() {
+            // Part 1.
+            let file_path = "/Users/vnordling/RustroverProjects/advent/src/input19.txt";
+
+            let input = fs::read_to_string(file_path).unwrap();
+            let parts: Vec<&str> = input.split("\n\n").collect();
+
+            let rule_part: &str = &parts[0];
+            let parts_part: &str = &parts[1];
+            let workflows: Vec<Workflow> = rule_part
+                .lines()
+                .map(String::from)
+                .map(|s| parse_workflow(&s))
+                .collect();
+
+            let parts2: Vec<Part> = parts_part
+                .lines()
+                .map(String::from)
+                .map(|s| parse_part(&s))
     }
     return Workflow { name: workflow_name.to_string(), rules: rule_vec };
 }
 
-fn main() {
-    // Part 1.
-    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input19.txt";
-
-    let input = fs::read_to_string(file_path).unwrap();
-    let parts: Vec<&str> = input.split("\n\n").collect();
-
-    let rule_part: &str = &parts[0];
-    let parts_part: &str = &parts[1];
-    let workflows: Vec<Workflow> = rule_part
-        .lines()
-        .map(String::from)
-        .map(|s| parse_workflow(&s))
-        .collect();
-
-    let parts2: Vec<Part> = parts_part
-        .lines()
-        .map(String::from)
-        .map(|s| parse_part(&s))
         .collect();
 
     let sum: i32 = parts2.iter().filter(|p| apply_workflows(&p, &workflows)).map(|p| get_val(&p)).sum();
