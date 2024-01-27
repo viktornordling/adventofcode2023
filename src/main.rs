@@ -70,13 +70,34 @@ fn main() {
     // }
 
     let mut count = 0;
-    for k in big_result {
-        if k.1 == 'O' {
+    for k in &big_result {
+        if *k.1 == 'O' {
             count += 1;
         }
     }
 
     println!("Part 1: {}", count);
+
+    for cell_y in (-5) as i32..5 {
+        for cell_x in (-5) as i32..5 {
+            let mut box_count = 0;
+            let mut non_count = 0;
+            for y in 0..131 {
+                for x in 0..131 {
+                    let some_x = cell_x * 131 + x;
+                    let some_y = cell_y * 131 + y;
+                    let p = Pos { x: some_x as i32, y: some_y as i32 };
+                    let the_char = big_result.get(&p).unwrap();
+                    if *the_char == 'O' {
+                        box_count += 1;
+                    } else {
+                        non_count += 1;
+                    }
+                }
+            }
+            println!("Cell x = {}, y = {}, count = {}, non_count = {}", cell_x, cell_y, box_count, non_count);
+        }
+    }
 }
 
 fn take_step(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
@@ -141,6 +162,13 @@ fn take_big_step(big_grid: &HashMap<Pos, char>) -> HashMap<Pos, char> {
     for pos in start_positions {
         for dir in &dirs {
             let new_pos = Pos { x: pos.x + dir.x, y: pos.y + dir.y };
+            let a = big_grid.get(&new_pos);
+            match a {
+                None => {
+                    println!("PANIC!!! x = {}, y = {}", new_pos.x, new_pos.y);
+                }
+                Some(_) => {}
+            }
             let c = big_grid.get(&new_pos).unwrap();
             // println!("c = {}", c);
             if *c != '#' {
