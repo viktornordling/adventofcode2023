@@ -1,23 +1,44 @@
+use std::cmp::{max, min, Ordering};
 use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
+use std::ops::Range;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Pos {
     x: i32,
     y: i32,
+    z: i32,
 }
 
 impl Hash for Pos {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.x.hash(state);
         self.y.hash(state);
+        self.z.hash(state);
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+struct Block {
+    id: char,
+    start: Pos,
+    end: Pos,
+}
+
+fn compare_blocks(b1: &Block, b2: &Block) -> Ordering {
+    let max_z_1 = min(b1.start.z, b1.end.z);
+    let max_z_2 = min(b2.start.z, b2.end.z);
+    return max_z_1.cmp(&max_z_2);
+}
+
+fn ranges_overlap(r1: &Range<i32>, r2: &Range<i32>) -> bool {
+    return r1.start <= r2.end && r2.start <= r1.end;
 }
 
 fn main() {
     // Part 1.
-    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input20.txt";
+    let file_path = "/Users/vnordling/RustroverProjects/advent/src/input22.txt";
 
     let lines: Vec<String> = fs::read_to_string(file_path)
         .unwrap()
@@ -25,177 +46,50 @@ fn main() {
         .map(String::from)
         .collect();
 
-    let grid: Vec<Vec<char>> = lines.iter()
-        .map(|line| line.chars().collect())
-        .collect();
-    println!("Grid width = {}, grid height = {}", grid.len(), grid[0].len());
-    let mut big_grid: HashMap<Pos, char> = HashMap::new();
-    for cell_y in (-5) as i32..5 {
-        for cell_x in (-5) as i32..5 {
-            for y in 0..131 {
-                for x in 0..131 {
-                    let some_x = cell_x * 131 + x;
-                    let some_y = cell_y * 131 + y;
-                    let the_char = grid[y as usize][x as usize];
-                    if the_char == 'S' && !(cell_x == 0 && cell_y == 0) {
-                        big_grid.insert(Pos { x: some_x as i32, y: some_y as i32 }, '.');
-                    } else {
-                        big_grid.insert(Pos { x: some_x as i32, y: some_y as i32 }, the_char);
-                    }
+    let mut id = 'A';
+    let mut blocks: Vec<Block> = Vec::new();
+    for line in lines.iter() {
+        let block = create_block(id, &line);
+        id = std::char::from_u32((id as u32) + 1).unwrap();
+        blocks.push(block);
+    }
+    // let mut sorted_map: SortedMap<Block, bool>;
+    blocks.sort_by(compare_blocks);
+
+    // Drop each block to its final resting position.
+    // The blocks are sorted by z, so we'll look at the lowest block first.
+    for i in 0..blocks.len() {
+        let mut block = blocks[i];
+        // Find all blocks which are "below" this block.
+        // Only count blocks which overlap in the y/x and which have a z which is below this block
+        let mut blocks_under: Vec<&Block> = Vec::new();
+        let mut highest_z_under = 0;
+        let low_z = min(block.start.z, block.end.z);
+        for other_block in &blocks {
+            let other_high_z = min(other_block.start.z, other_block.end.z);
+            let x_overlaps = ranges_overlap(&Range { start: block.start.x, end: block.end.x }, &Range { start: other_block.start.x, end: other_block.end.x });
+            let y_overlaps = ranges_overlap(&Range { start: block.start.y, end: block.end.y }, &Range { start: other_block.start.y, end: other_block.end.y });
+            if other_high_z < low_z && x_overlaps && y_overlaps {
+                blocks_under.push(other_block);
+                if other_high_z > highest_z_under {
+                    highest_z_under = other_high_z;
                 }
             }
         }
-    }
-    println!("BIG GRID!");
-    print_big_grid(&big_grid, -131, 262);
-    println!("END BIG GRID!");
-
-    println!("ORG GRID!");
-    print_grid(&grid);
-    println!("END ORG GRID!");
-
-    let mut result = grid.clone();
-    let mut big_result = big_grid.clone();
-
-    for i in 0..589 {
-        big_result = take_big_step(&big_result);
-        // sleep(Duration::from_millis(400));
-        // print_big_grid(&big_result, -131, 262);
-        println!("{}", i);
-    }
-    print_big_grid(&big_result, -524, 655);
-    // for i in 0..10 {
-    //     result = take_step(&result);
-    //     print_grid(&result);
-    // }
-
-    let mut count = 0;
-    for k in &big_result {
-        if *k.1 == 'O' {
-            count += 1;
-        }
-    }
-
-    println!("Part 1: {}", count);
-
-    for cell_y in (-5) as i32..5 {
-        for cell_x in (-5) as i32..5 {
-            let mut box_count = 0;
-            let mut non_count = 0;
-            for y in 0..131 {
-                for x in 0..131 {
-                    let some_x = cell_x * 131 + x;
-                    let some_y = cell_y * 131 + y;
-                    let p = Pos { x: some_x as i32, y: some_y as i32 };
-                    let the_char = big_result.get(&p).unwrap();
-                    if *the_char == 'O' {
-                        box_count += 1;
-                    } else {
-                        non_count += 1;
-                    }
-                }
-            }
-            println!("Cell x = {}, y = {}, count = {}, non_count = {}", cell_x, cell_y, box_count, non_count);
+        if block.start.z < block.end.z {
+            let block_height = block.end.z - block.start.z;
+            block.start.z = highest_z_under;
+            block.end.z = block.start.z + block_height;
         }
     }
 }
 
-fn take_step(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
-    let mut result = grid.clone();
-    let mut start_positions: Vec<Pos> = Vec::new();
-    // print_grid(&grid);
-
-    let up = Pos { x: 0, y: -1 };
-    let down = Pos { x: 0, y: 1 };
-    let left = Pos { x: -1, y: 0 };
-    let right = Pos { x: 1, y: 0 };
-
-    let dirs = vec![up, down, left, right];
-
-    for y in 0..result.len() {
-        for x in 0..result[0].len() {
-            if result[y][x] == 'S' || result[y][x] == 'O' {
-                result[y][x] = '.';
-                start_positions.push(Pos {y: y as i32, x: x as i32});
-            }
-        }
-    }
-    for pos in start_positions {
-        for dir in &dirs {
-            let new_pos = Pos { x: pos.x + dir.x, y: pos.y + dir.y };
-            if new_pos.y >= 0 && new_pos.x >= 0 && new_pos.y < grid.len() as i32 && new_pos.x < grid.first().unwrap().len() as i32 && grid[new_pos.y as usize][new_pos.x as usize] != '#' {
-                result[new_pos.y as usize][new_pos.x as usize] = 'O';
-            }
-        }
-    }
-
-    return result;
-}
-
-fn take_big_step(big_grid: &HashMap<Pos, char>) -> HashMap<Pos, char> {
-    let mut result = big_grid.clone();
-    let mut start_positions: Vec<Pos> = Vec::new();
-    // print_grid(&grid);
-
-    let up = Pos { x: 0, y: -1 };
-    let down = Pos { x: 0, y: 1 };
-    let left = Pos { x: -1, y: 0 };
-    let right = Pos { x: 1, y: 0 };
-
-    let dirs = vec![up, down, left, right];
-
-    for k in big_grid {
-        if k.1 == &'S' || k.1 == &'O' {
-            result.insert(k.0.clone(), '.');
-            start_positions.push(k.0.clone());
-        }
-    }
-    // for y in 0..result.len() {
-    //     for x in 0..result[0].len() {
-    //         if result[y][x] == 'S' || result[y][x] == 'O' {
-    //             result[y][x] = '.';
-    //             start_positions.push(Pos {y: y as i32, x: x as i32});
-    //         }
-    //     }
-    // }
-    println!("num start positions: {}", start_positions.len());
-    for pos in start_positions {
-        for dir in &dirs {
-            let new_pos = Pos { x: pos.x + dir.x, y: pos.y + dir.y };
-            let a = big_grid.get(&new_pos);
-            match a {
-                None => {
-                    println!("PANIC!!! x = {}, y = {}", new_pos.x, new_pos.y);
-                }
-                Some(_) => {}
-            }
-            let c = big_grid.get(&new_pos).unwrap();
-            // println!("c = {}", c);
-            if *c != '#' {
-                result.insert(new_pos, 'O');
-            }
-        }
-    }
-
-    return result.clone();
-}
-
-fn print_grid(grid: &Vec<Vec<char>>) {
-    for y in 0..grid.len() {
-        for x in 0..grid[0].len() {
-            print!("{}", grid[y][x]);
-        }
-        println!();
-    }
-}
-
-fn print_big_grid(big_grid: &HashMap<Pos, char>, start: i32, end: i32) {
-    for y in start..end {
-        for x in start..end {
-            let c = big_grid.get(&Pos { x, y }).unwrap();
-            print!("{}", c);
-        }
-        println!();
-    }
+fn create_block(id: char, line: &String) -> Block {
+    let parts: Vec<&str> = line.split("~").collect();
+    let start_coords: Vec<&str> = parts[0].split(",").collect();
+    let end_coords: Vec<&str> = parts[1].split(",").collect();
+    let start = Pos { x: start_coords[0].parse().ok().unwrap(), y: start_coords[1].parse().ok().unwrap(), z: start_coords[2].parse().ok().unwrap() };
+    let end = Pos { x: end_coords[0].parse().ok().unwrap(), y: end_coords[1].parse().ok().unwrap(), z: end_coords[2].parse().ok().unwrap() };
+    return Block { id, start, end };
 }
 
