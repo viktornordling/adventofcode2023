@@ -21,19 +21,28 @@ impl Hash for Pos {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Block {
-    id: char,
+    id: i32,
     start: Pos,
     end: Pos,
 }
 
 fn compare_blocks(b1: &Block, b2: &Block) -> Ordering {
-    let max_z_1 = min(b1.start.z, b1.end.z);
-    let max_z_2 = min(b2.start.z, b2.end.z);
+    let max_z_1 = max(b1.start.z, b1.end.z);
+    let max_z_2 = max(b2.start.z, b2.end.z);
     return max_z_1.cmp(&max_z_2);
 }
 
+fn fix_range(range: &Range<i32>) -> Range<i32> {
+    if range.start <= range.end {
+        return range.clone();
+    }
+    return Range { start: range.end, end: range.start };
+}
+
 fn ranges_overlap(r1: &Range<i32>, r2: &Range<i32>) -> bool {
-    return r1.start <= r2.end && r2.start <= r1.end;
+    let r1_fixed = fix_range(r1);
+    let r2_fixed = fix_range(r2);
+    return r1_fixed.start <= r2_fixed.end && r2_fixed.start <= r1_fixed.end;
 }
 
 fn main() {
@@ -46,11 +55,11 @@ fn main() {
         .map(String::from)
         .collect();
 
-    let mut id = 'A';
+    let mut id = 1;
     let mut blocks: Vec<Block> = Vec::new();
     for line in lines.iter() {
         let block = create_block(id, &line);
-        id = std::char::from_u32((id as u32) + 1).unwrap();
+        id += 1;
         blocks.push(block);
     }
     // let mut sorted_map: SortedMap<Block, bool>;
@@ -59,7 +68,7 @@ fn main() {
     // Drop each block to its final resting position.
     // The blocks are sorted by z, so we'll look at the lowest block first.
     for i in 0..blocks.len() {
-        let mut block = blocks[i];
+        let block = blocks[i];
         // Find all blocks which are "below" this block.
         // Only count blocks which overlap in the y/x and which have a z which is below this block
         let mut blocks_under: Vec<&Block> = Vec::new();
@@ -70,9 +79,6 @@ fn main() {
             // let other_low_z = min(other_block.start.z, other_block.end.z);
             let x_overlaps = ranges_overlap(&Range { start: block.start.x, end: block.end.x }, &Range { start: other_block.start.x, end: other_block.end.x });
             let y_overlaps = ranges_overlap(&Range { start: block.start.y, end: block.end.y }, &Range { start: other_block.start.y, end: other_block.end.y });
-            if block.id == 'D' && other_block.id == 'C' {
-                println!("!!! c.start.z = {}, c.end.z = {}", other_block.start.z, other_block.end.z);
-            }
             if other_high_z < low_z && x_overlaps && y_overlaps {
                 blocks_under.push(other_block);
                 if other_high_z + 1 > highest_z_under {
@@ -81,30 +87,23 @@ fn main() {
             }
         }
         if block.start.z < block.end.z {
-            println!("1 New z for block {} is {}", block.id, highest_z_under);
             let block_height = block.end.z - block.start.z;
-            // println!("z.start = {} z.end = {}", block.start.z, block.end.z);
             blocks[i].start.z = highest_z_under;
-            blocks[i].end.z = block.start.z + block_height;
+            blocks[i].end.z = blocks[i].start.z + block_height;
         } else {
-            println!("2 New z for block {} is {}", block.id, highest_z_under);
             let block_height = block.start.z - block.end.z;
-            // println!("block height is {}", block_height);
-            // block.end.z = highest_z_under;
-            // block.start.z = block.end.z + block_height;
             blocks[i].end.z = highest_z_under;
             blocks[i].start.z = highest_z_under + block_height;
-            // println!("z.start = {} z.end = {}", block.start.z, block.end.z);
         }
     }
 
-    let mut block_to_blocks_it_rests_on: HashMap<char, Vec<char>> = HashMap::new();
-    let mut block_to_blocks_that_rest_on_it: HashMap<char, Vec<char>> = HashMap::new();
+    let mut block_to_blocks_it_rests_on: HashMap<i32, Vec<i32>> = HashMap::new();
+    let mut block_to_blocks_that_rest_on_it: HashMap<i32, Vec<i32>> = HashMap::new();
 
     let mut num_can_be_disintegrated = 0;
     for block in &blocks {
-        let mut blocks_i_rest_on: Vec<char> = Vec::new();
-        let mut blocks_that_rest_on_me: Vec<char> = Vec::new();
+        let mut blocks_i_rest_on: Vec<i32> = Vec::new();
+        let mut blocks_that_rest_on_me: Vec<i32> = Vec::new();
         for other_block in &blocks {
             if other_block.id == block.id {
                 continue;
@@ -117,22 +116,15 @@ fn main() {
             let y_overlaps = ranges_overlap(&Range { start: block.start.y, end: block.end.y }, &Range { start: other_block.start.y, end: other_block.end.y });
 
             if other_high_z == this_low_z - 1 && x_overlaps && y_overlaps {
-                println!("I ({}) rest on block {}", block.id, other_block.id);
                 blocks_i_rest_on.push(other_block.id);
-            } else {
-                println!("I ({}) don't rest on block {}", block.id, other_block.id);
             }
             if other_low_z == this_high_z + 1 && x_overlaps && y_overlaps {
-                println!("Block ({}) rests on me ({})", other_block.id, block.id);
                 blocks_that_rest_on_me.push(other_block.id);
-            } else {
-                println!("Block ({}) doesn't rest on me {}", other_block.id, block.id);
             }
         }
         block_to_blocks_it_rests_on.insert(block.id, blocks_i_rest_on.clone());
         block_to_blocks_that_rest_on_it.insert(block.id, blocks_that_rest_on_me.clone());
         if blocks_that_rest_on_me.len() == 0 {
-            println!("block {} can be disintegrated!", block.id);
             num_can_be_disintegrated += 1;
         }
     }
@@ -142,20 +134,18 @@ fn main() {
             for y in x.1 {
                 let bb = block_to_blocks_it_rests_on.get(y).unwrap();
                 if bb.len() < 2 {
-                    println!("Block {} only rests on this block, we can't disintegrated it! this={}, bb={:?}", y, x.0, bb);
                     can_be_disintegrated = false;
                 }
             }
             if can_be_disintegrated {
                 num_can_be_disintegrated += 1;
-                println!("block {} can be disintegrated!", x.0);
             }
         }
     }
-    println!("Num = {}", num_can_be_disintegrated);
+    println!("Part 1: {}", num_can_be_disintegrated);
 }
 
-fn create_block(id: char, line: &String) -> Block {
+fn create_block(id: i32, line: &String) -> Block {
     let parts: Vec<&str> = line.split("~").collect();
     let start_coords: Vec<&str> = parts[0].split(",").collect();
     let end_coords: Vec<&str> = parts[1].split(",").collect();
