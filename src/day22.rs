@@ -1,8 +1,11 @@
+extern crate queues;
+
 use std::cmp::{max, min, Ordering};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
+use queues::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Pos {
@@ -143,6 +146,45 @@ fn main() {
         }
     }
     println!("Part 1: {}", num_can_be_disintegrated);
+
+    let mut total = 0;
+    for block in &blocks {
+        let falls = count_blocks_that_would_fall_if_this_block_was_disintegrated(block, &block_to_blocks_it_rests_on, &block_to_blocks_that_rest_on_it);
+        // println!("{} blocks would fall if {} was disintegrated", falls, block.id);
+        total += falls;
+    }
+    println!("Part 2: {}", total);
+}
+
+fn count_blocks_that_would_fall_if_this_block_was_disintegrated(start_block: &Block, block_to_blocks_it_rests_on: &HashMap<i32, Vec<i32>>, block_to_blocks_that_rest_on_it: &HashMap<i32, Vec<i32>>) -> i32 {
+    let mut queue: Queue<i32> = Queue::new();
+    _ = queue.add(start_block.id);
+    let mut blocks_that_would_fall = 0;
+    let mut disintegrated: HashSet<i32> = HashSet::new();
+    while queue.size() > 0 {
+        let block_id = queue.remove().unwrap();
+        disintegrated.insert(block_id);
+        // println!("Pulled {} from queue {:?}", block_id, queue);
+
+        // For each block that rests on me, if it will fall down as a result of disintegrating this block,
+        // add it to the queue.
+        let blocks_that_rest_on_me = block_to_blocks_that_rest_on_it.get(&block_id).unwrap();
+        for block_that_rests_on_me in blocks_that_rest_on_me {
+            let blocks_this_block_rests_on = block_to_blocks_it_rests_on.get(block_that_rests_on_me).unwrap();
+            let mut resting = 0;
+            for b in blocks_this_block_rests_on {
+                if !disintegrated.contains(b) {
+                    resting += 1;
+                }
+            }
+            let would_fall = resting == 0;
+            if would_fall {
+                blocks_that_would_fall += 1;
+                _ = queue.add(block_that_rests_on_me.clone());
+            }
+        }
+    }
+    return blocks_that_would_fall;
 }
 
 fn create_block(id: i32, line: &String) -> Block {
@@ -153,4 +195,3 @@ fn create_block(id: i32, line: &String) -> Block {
     let end = Pos { x: end_coords[0].parse().ok().unwrap(), y: end_coords[1].parse().ok().unwrap(), z: end_coords[2].parse().ok().unwrap() };
     return Block { id, start, end };
 }
-
