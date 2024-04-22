@@ -28,7 +28,7 @@ fn main() {
 
     // Part 2.
     total_sum = 0;
-    let mut num_map = HashMap::from([
+    let num_map = HashMap::from([
         ("one", '1'),
         ("two", '2'),
         ("three", '3'),
@@ -49,7 +49,7 @@ fn main() {
                 // two1nine 2 + 9 = '2' + '9' = "29"
                 let substring = line.index(index..);
                 for num in num_map.keys() {
-                    if (substring.starts_with(num)) {
+                    if substring.starts_with(num) {
                         nums.push(num_map[num]);
                     }
                 }
